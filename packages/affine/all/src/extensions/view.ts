@@ -8,6 +8,7 @@ import { DividerViewExtension } from '@blocksuite/affine-block-divider/view';
 import { EdgelessTextViewExtension } from '@blocksuite/affine-block-edgeless-text/view';
 import { EmbedViewExtension } from '@blocksuite/affine-block-embed/view';
 import { EmbedDocViewExtension } from '@blocksuite/affine-block-embed-doc/view';
+import { EmbedMdViewExtension } from '@blocksuite/affine-block-embed-md/view';
 import { FrameViewExtension } from '@blocksuite/affine-block-frame/view';
 import { ImageViewExtension } from '@blocksuite/affine-block-image/view';
 import { LatexViewExtension } from '@blocksuite/affine-block-latex/view';
@@ -84,6 +85,7 @@ export function getInternalViewExtensions() {
     EdgelessTextViewExtension,
     EmbedViewExtension,
     EmbedDocViewExtension,
+    EmbedMdViewExtension,
     FrameViewExtension,
     ImageViewExtension,
     LatexViewExtension,

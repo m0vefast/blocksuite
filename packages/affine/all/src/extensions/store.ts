@@ -7,6 +7,7 @@ import { DatabaseStoreExtension } from '@blocksuite/affine-block-database/store'
 import { DividerStoreExtension } from '@blocksuite/affine-block-divider/store';
 import { EdgelessTextStoreExtension } from '@blocksuite/affine-block-edgeless-text/store';
 import { EmbedStoreExtension } from '@blocksuite/affine-block-embed/store';
+import { EmbedMdStoreExtension } from '@blocksuite/affine-block-embed-md/store';
 import { EmbedDocStoreExtension } from '@blocksuite/affine-block-embed-doc/store';
 import { FrameStoreExtension } from '@blocksuite/affine-block-frame/store';
 import { ImageStoreExtension } from '@blocksuite/affine-block-image/store';
@@ -53,6 +54,7 @@ export function getInternalStoreExtensions() {
     ParagraphStoreExtension,
     SurfaceRefStoreExtension,
     TableStoreExtension,
+    EmbedMdStoreExtension,
     SurfaceStoreExtension,
     RootStoreExtension,
 
