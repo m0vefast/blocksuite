@@ -2,19 +2,119 @@ import {
   type ElementRenderer,
   ElementRendererExtension,
 } from '@blocksuite/affine-block-surface';
-import type { GridElementModel } from '@blocksuite/affine-model';
+import { ColorScheme, type GridElementModel } from '@blocksuite/affine-model';
 
 const ACCENT = 'rgba(30, 130, 250,';
-const EMPTY_PLUS_COLOR = 'rgba(180, 180, 180, 0.3)';
+
+// ── Theme-aware chrome color palette ───────────────────────────
+// All non-model UI elements (handles, buttons, empty-cell hints, shadows)
+// adapt to the current dark/light scheme.
+function getChromeColors(scheme: ColorScheme) {
+  const dark = scheme === ColorScheme.Dark;
+  return {
+    // Grab handle dots
+    handleDot:        dark ? 'rgba(160,160,160,0.50)' : 'rgba(140,140,140,0.40)',
+    // "+" button — default (not hovered)
+    btnFill:          dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+    btnStroke:        dark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.10)',
+    btnIcon:          dark ? 'rgba(255,255,255,0.40)' : 'rgba(0,0,0,0.28)',
+    // "+" button — secondary (row above/below, col left/right)
+    btnFillSec:       dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+    btnStrokeSec:     dark ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.12)',
+    btnIconSec:       dark ? 'rgba(255,255,255,0.40)' : 'rgba(0,0,0,0.28)',
+    // Empty cell dashed border
+    emptyCellDash:    dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.07)',
+    // Drag shadow
+    dragShadow:       dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.20)',
+    // Drag fallback fill (when model fill is transparent)
+    dragFallback:     dark ? '#2a2a2a' : '#ffffff',
+    // Cell resize handle circle fill
+    resizeHandleFill: dark ? '#2a2a2a' : '#ffffff',
+  };
+}
+
+// ── Helper: draw a "+" button (circle + plus icon) ─────────────
+function drawPlusButton(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  iconR: number,
+  hovered: boolean,
+  chrome: ReturnType<typeof getChromeColors>
+) {
+  // Circle
+  ctx.fillStyle   = hovered ? `${ACCENT} 0.12)` : chrome.btnFill;
+  ctx.strokeStyle  = hovered ? `${ACCENT} 0.45)` : chrome.btnStroke;
+  ctx.lineWidth    = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // "+" icon
+  ctx.strokeStyle  = hovered ? `${ACCENT} 0.70)` : chrome.btnIcon;
+  ctx.lineWidth    = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(x - iconR, y);
+  ctx.lineTo(x + iconR, y);
+  ctx.moveTo(x, y - iconR);
+  ctx.lineTo(x, y + iconR);
+  ctx.stroke();
+}
+
+// ── Helper: draw a secondary "+" button (smaller, for row/col insert) ──
+function drawSecPlusButton(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  hovered: boolean,
+  chrome: ReturnType<typeof getChromeColors>
+) {
+  ctx.fillStyle   = hovered ? `${ACCENT} 0.14)` : chrome.btnFillSec;
+  ctx.strokeStyle  = hovered ? `${ACCENT} 0.55)` : chrome.btnStrokeSec;
+  ctx.lineWidth    = 1.5;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle  = hovered ? `${ACCENT} 0.80)` : chrome.btnIconSec;
+  ctx.lineWidth    = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x - 4, y);
+  ctx.lineTo(x + 4, y);
+  ctx.moveTo(x, y - 4);
+  ctx.lineTo(x, y + 4);
+  ctx.stroke();
+}
 
 export const grid: ElementRenderer<GridElementModel> = (
   model,
   ctx,
   _matrix,
-  _renderer,
+  renderer,
   _rc,
   bound
 ) => {
+  const scheme = renderer.getColorScheme();
+  const chrome = getChromeColors(scheme);
+
+  // Resolve theme-aware model colors
+  const fillColor = renderer.getColorValue(
+    model.fillColor,
+    { light: '#FFFFFF', dark: '#252525' },
+    true
+  );
+  const strokeColor = renderer.getColorValue(
+    model.strokeColor,
+    { light: '#E0E0E0', dark: '#414141' },
+    true
+  );
+  const isFillTransparent =
+    fillColor === 'transparent' || fillColor.endsWith('transparent');
+
   const [originX, originY] = model.deserializedXYWH;
   const dx = originX - bound.x;
   const dy = originY - bound.y;
@@ -44,17 +144,17 @@ export const grid: ElementRenderer<GridElementModel> = (
       // Dragged row/col: shadow under offset cells
       if (isThisDraggedRow || isThisDraggedCol) {
         ctx.save();
-        ctx.shadowColor = 'rgba(0,0,0,0.25)';
+        ctx.shadowColor = chrome.dragShadow;
         ctx.shadowBlur = 12;
         ctx.shadowOffsetY = 3;
-        ctx.fillStyle = model.fillColor !== 'transparent' ? model.fillColor : '#fff';
+        ctx.fillStyle = !isFillTransparent ? fillColor : chrome.dragFallback;
         ctx.fillRect(cx, cy, cb.w, cb.h);
         ctx.restore();
       }
 
       // Base fill
-      if (model.fillColor !== 'transparent') {
-        ctx.fillStyle = model.fillColor;
+      if (!isFillTransparent) {
+        ctx.fillStyle = fillColor;
         ctx.fillRect(cx, cy, cb.w, cb.h);
       }
 
@@ -88,7 +188,7 @@ export const grid: ElementRenderer<GridElementModel> = (
       // Empty cells: subtle dashed border to indicate they accept content
       if (!model.getChildInCell(r, c) && !isCellSelected && !isCellHovered) {
         ctx.setLineDash([3, 3]);
-        ctx.strokeStyle = 'rgba(180, 180, 180, 0.25)';
+        ctx.strokeStyle = chrome.emptyCellDash;
         ctx.lineWidth = 1;
         ctx.strokeRect(cx + 4, cy + 4, cb.w - 8, cb.h - 8);
         ctx.setLineDash([]);
@@ -97,7 +197,7 @@ export const grid: ElementRenderer<GridElementModel> = (
   }
 
   // ── Grid lines ────────────────────────────────────────
-  ctx.strokeStyle = model.strokeColor;
+  ctx.strokeStyle = strokeColor;
 
   // Outer border (thicker)
   ctx.lineWidth = model.strokeWidth * 2;
@@ -162,11 +262,8 @@ export const grid: ElementRenderer<GridElementModel> = (
     ctx.fillStyle = `${ACCENT} 0.9)`;
 
     if (dri.axis === 'row') {
-      // dri.position is a boundary index (0..rows): 0=before first, rows=after last
-      // Clamped to valid cell index for getCellBound
       const clampedRow = Math.min(dri.position, model.rows - 1);
       const cb = model.getCellBound(clampedRow, 0);
-      // Top of row if position < rows, bottom of last row if position == rows
       const lineY = dri.position >= model.rows
         ? cb.y - bound.y + cb.h + model.gap / 2
         : cb.y - bound.y - model.gap / 2;
@@ -217,7 +314,7 @@ export const grid: ElementRenderer<GridElementModel> = (
       ? `${ACCENT} 0.7)`
       : isHovered
         ? `${ACCENT} 0.5)`
-        : 'rgba(180,180,180,0.4)';
+        : chrome.handleDot;
     for (let dr = 0; dr < 3; dr++) {
       for (let dc = 0; dc < 2; dc++) {
         ctx.beginPath();
@@ -247,7 +344,7 @@ export const grid: ElementRenderer<GridElementModel> = (
       ? `${ACCENT} 0.7)`
       : isHovered
         ? `${ACCENT} 0.5)`
-        : 'rgba(180,180,180,0.4)';
+        : chrome.handleDot;
     for (let dr = 0; dr < 2; dr++) {
       for (let dc = 0; dc < 3; dc++) {
         ctx.beginPath();
@@ -257,59 +354,23 @@ export const grid: ElementRenderer<GridElementModel> = (
     }
   }
 
-  // ── "+" buttons (only in cell/row/col mode — hidden when framework-selected) ──
+  // ── "+" buttons (always visible) ──────────────────────
   const PLUS_R = 12;
   const PLUS_ICON = 5;
-  const showPlusButtons = true; // always visible
 
   // Add Column button (right edge center)
-  if (showPlusButtons) {
-    const btnX = dx + totalW + PLUS_R + 16;
-    const btnY = dy + totalH / 2;
-    const hovered = model.hoveredAddButton === 'addCol';
-
-    ctx.fillStyle = hovered ? `${ACCENT} 0.12)` : 'rgba(200,200,200,0.15)';
-    ctx.strokeStyle = hovered ? `${ACCENT} 0.5)` : 'rgba(180,180,180,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(btnX, btnY, PLUS_R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // "+" icon
-    ctx.strokeStyle = hovered ? `${ACCENT} 0.7)` : 'rgba(150,150,150,0.6)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(btnX - PLUS_ICON, btnY);
-    ctx.lineTo(btnX + PLUS_ICON, btnY);
-    ctx.moveTo(btnX, btnY - PLUS_ICON);
-    ctx.lineTo(btnX, btnY + PLUS_ICON);
-    ctx.stroke();
-  }
+  drawPlusButton(ctx,
+    dx + totalW + PLUS_R + 16, dy + totalH / 2,
+    PLUS_R, PLUS_ICON,
+    model.hoveredAddButton === 'addCol', chrome
+  );
 
   // Add Row button (bottom edge center)
-  if (showPlusButtons) {
-    const btnX = dx + totalW / 2;
-    const btnY = dy + totalH + PLUS_R + 16;
-    const hovered = model.hoveredAddButton === 'addRow';
-
-    ctx.fillStyle = hovered ? `${ACCENT} 0.12)` : 'rgba(200,200,200,0.15)';
-    ctx.strokeStyle = hovered ? `${ACCENT} 0.5)` : 'rgba(180,180,180,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(btnX, btnY, PLUS_R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.strokeStyle = hovered ? `${ACCENT} 0.7)` : 'rgba(150,150,150,0.6)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(btnX - PLUS_ICON, btnY);
-    ctx.lineTo(btnX + PLUS_ICON, btnY);
-    ctx.moveTo(btnX, btnY - PLUS_ICON);
-    ctx.lineTo(btnX, btnY + PLUS_ICON);
-    ctx.stroke();
-  }
+  drawPlusButton(ctx,
+    dx + totalW / 2, dy + totalH + PLUS_R + 16,
+    PLUS_R, PLUS_ICON,
+    model.hoveredAddButton === 'addRow', chrome
+  );
 
   // ── Row/Col selection highlight ────────────────────────
   if (model.selectionMode === 'row' && model.selectedRow >= 0) {
@@ -324,32 +385,15 @@ export const grid: ElementRenderer<GridElementModel> = (
     ctx.lineWidth = 2.5;
     ctx.strokeRect(sx, sy, sw, firstCell.h);
 
-    // "+" buttons: add row above / below (at handle X position)
-    const handleX = sx - HANDLE_W - 4 + HANDLE_W / 2; // center of grip handle
+    // "+" buttons: add row above / below
+    const handleX = sx - HANDLE_W - 4 + HANDLE_W / 2;
     const aboveY = sy - PLUS_R - 3;
     const belowY = sy + firstCell.h + PLUS_R + 3;
-    const hoveredAbove = model.hoveredAddButton === 'addRowAbove';
-    const hoveredBelow = model.hoveredAddButton === 'addRowBelow';
 
-    // Add row above
-    ctx.fillStyle = hoveredAbove ? `${ACCENT} 0.15)` : 'rgba(200,200,200,0.2)';
-    ctx.strokeStyle = hoveredAbove ? `${ACCENT} 0.6)` : 'rgba(180,180,180,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(handleX, aboveY, PLUS_R - 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = hoveredAbove ? `${ACCENT} 0.8)` : 'rgba(150,150,150,0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(handleX - 4, aboveY); ctx.lineTo(handleX + 4, aboveY);
-    ctx.moveTo(handleX, aboveY - 4); ctx.lineTo(handleX, aboveY + 4); ctx.stroke();
-
-    // Add row below
-    ctx.fillStyle = hoveredBelow ? `${ACCENT} 0.15)` : 'rgba(200,200,200,0.2)';
-    ctx.strokeStyle = hoveredBelow ? `${ACCENT} 0.6)` : 'rgba(180,180,180,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(handleX, belowY, PLUS_R - 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = hoveredBelow ? `${ACCENT} 0.8)` : 'rgba(150,150,150,0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(handleX - 4, belowY); ctx.lineTo(handleX + 4, belowY);
-    ctx.moveTo(handleX, belowY - 4); ctx.lineTo(handleX, belowY + 4); ctx.stroke();
+    drawSecPlusButton(ctx, handleX, aboveY, PLUS_R - 2,
+      model.hoveredAddButton === 'addRowAbove', chrome);
+    drawSecPlusButton(ctx, handleX, belowY, PLUS_R - 2,
+      model.hoveredAddButton === 'addRowBelow', chrome);
   }
 
   if (model.selectionMode === 'col' && model.selectedCol >= 0) {
@@ -364,32 +408,15 @@ export const grid: ElementRenderer<GridElementModel> = (
     ctx.lineWidth = 2.5;
     ctx.strokeRect(sx, sy, firstCell.w, sh);
 
-    // "+" buttons: add col left / right (at handle Y position)
+    // "+" buttons: add col left / right
     const handleY = sy - HANDLE_W - 4 + HANDLE_W / 2;
     const leftX = sx - PLUS_R - 3;
     const rightX = sx + firstCell.w + PLUS_R + 3;
-    const hoveredLeft = model.hoveredAddButton === 'addColLeft';
-    const hoveredRight = model.hoveredAddButton === 'addColRight';
 
-    // Add col left
-    ctx.fillStyle = hoveredLeft ? `${ACCENT} 0.15)` : 'rgba(200,200,200,0.2)';
-    ctx.strokeStyle = hoveredLeft ? `${ACCENT} 0.6)` : 'rgba(180,180,180,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(leftX, handleY, PLUS_R - 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = hoveredLeft ? `${ACCENT} 0.8)` : 'rgba(150,150,150,0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(leftX - 4, handleY); ctx.lineTo(leftX + 4, handleY);
-    ctx.moveTo(leftX, handleY - 4); ctx.lineTo(leftX, handleY + 4); ctx.stroke();
-
-    // Add col right
-    ctx.fillStyle = hoveredRight ? `${ACCENT} 0.15)` : 'rgba(200,200,200,0.2)';
-    ctx.strokeStyle = hoveredRight ? `${ACCENT} 0.6)` : 'rgba(180,180,180,0.4)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(rightX, handleY, PLUS_R - 2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    ctx.strokeStyle = hoveredRight ? `${ACCENT} 0.8)` : 'rgba(150,150,150,0.6)';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(rightX - 4, handleY); ctx.lineTo(rightX + 4, handleY);
-    ctx.moveTo(rightX, handleY - 4); ctx.lineTo(rightX, handleY + 4); ctx.stroke();
+    drawSecPlusButton(ctx, leftX, handleY, PLUS_R - 2,
+      model.hoveredAddButton === 'addColLeft', chrome);
+    drawSecPlusButton(ctx, rightX, handleY, PLUS_R - 2,
+      model.hoveredAddButton === 'addColRight', chrome);
   }
 
   // ── Dragged row/col unified border (over everything) ───
@@ -417,25 +444,24 @@ export const grid: ElementRenderer<GridElementModel> = (
   }
 
   // ── Cell resize handles (drawn LAST = highest z-index) ─
-  // Handles sit OUTSIDE the cell edge (|O pattern)
   if (model.selectionMode === 'cell' && model.selectedCell) {
     const sc = model.selectedCell;
     const cb = model.getCellBound(sc.row, sc.col);
     const cx = cb.x - bound.x;
     const cy = cb.y - bound.y;
     const HR = 5;
-    const OFF = HR + 1; // offset outside the edge
+    const OFF = HR + 1;
 
-    ctx.fillStyle = 'white';
+    ctx.fillStyle = chrome.resizeHandleFill;
     ctx.strokeStyle = `${ACCENT} 0.9)`;
     ctx.lineWidth = 2;
 
-    // Right edge at 72% height → col resize
+    // Right edge at 72% height -> col resize
     ctx.beginPath();
     ctx.arc(cx + cb.w + OFF, cy + cb.h * 0.72, HR, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();
 
-    // Bottom edge at 72% width → row resize
+    // Bottom edge at 72% width -> row resize
     ctx.beginPath();
     ctx.arc(cx + cb.w * 0.72, cy + cb.h + OFF, HR, 0, Math.PI * 2);
     ctx.fill(); ctx.stroke();

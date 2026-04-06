@@ -125,6 +125,45 @@ export class GridView extends GfxElementModelView<GridElementModel> {
       })
     );
 
+    // Dynamic CSS for grid-cell embeds: target children by data-block-id
+    // so the embed height override only applies inside grid cells.
+    const gridStyleEl = document.createElement('style');
+    gridStyleEl.dataset.gridId = this.model.id;
+    document.head.appendChild(gridStyleEl);
+    this.disposable.add({ dispose: () => gridStyleEl.remove() });
+
+    const updateGridCellCSS = () => {
+      const ids = Array.from(this.model.children.keys());
+      if (ids.length === 0) { gridStyleEl.textContent = ''; return; }
+      // Build selectors scoped to this grid's children only
+      const s = (suffix: string) =>
+        ids.map(id => `affine-edgeless-text[data-block-id="${id}"]${suffix}`).join(',\n');
+      gridStyleEl.textContent = `
+        ${s(':has(.embed-block-container) > .edgeless-text-block-container')} {
+          height: 100%; display: flex; flex-direction: column;
+        }
+        ${s(':has(.embed-block-container) > .edgeless-text-block-container > div')} {
+          flex: 1; display: flex; flex-direction: column; min-height: 0;
+        }
+        ${s(':has(.embed-block-container) .affine-block-children-container')} {
+          flex: 1 !important; display: flex !important; flex-direction: column !important; min-height: 0;
+        }
+        ${s(' :has(> .affine-block-component > .embed-block-container)')} {
+          flex: 1; display: flex; flex-direction: column; min-height: 0;
+        }
+        ${s(' .affine-block-component:has(> .embed-block-container)')} {
+          flex: 1; display: flex; flex-direction: column; margin: 0 !important; min-height: 0;
+        }
+        ${s(':has(.embed-block-container) .embed-block-container')} {
+          flex: 1; height: auto !important; min-height: 0;
+        }
+      `;
+    };
+    updateGridCellCSS();
+    this.disposable.add(
+      this.model.children.observe(() => updateGridCellCSS())
+    );
+
     // Initial layout
     this.model.layout();
   }

@@ -18,6 +18,8 @@ import {
 import type { GfxBlockElementModel } from '@blocksuite/std/gfx';
 import * as Y from 'yjs';
 
+import type { Color } from '../../themes/index.js';
+
 export type CellDetail = {
   row: number;
   col: number;
@@ -121,13 +123,13 @@ export class GridElementModel
   accessor gap: number = 4;
 
   @field()
-  accessor strokeColor: string = '#E0E0E0';
+  accessor strokeColor: Color = { light: '#E0E0E0', dark: '#414141' };
 
   @field()
   accessor strokeWidth: number = 1;
 
   @field()
-  accessor fillColor: string = '#FFFFFF';
+  accessor fillColor: Color = { light: '#FFFFFF', dark: '#252525' };
 
   @field()
   accessor xywh: SerializedXYWH = '[0,0,604,454]';
