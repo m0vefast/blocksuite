@@ -12,7 +12,7 @@ import {
   stopPropagation,
 } from '@blocksuite/affine-shared/utils';
 import { EdgelessDraggableElementController } from '@blocksuite/affine-widget-edgeless-toolbar';
-import { Bound } from '@blocksuite/global/gfx';
+import type { Bound } from '@blocksuite/global/gfx';
 import { WithDisposable } from '@blocksuite/global/lit';
 import type { BlockComponent } from '@blocksuite/std';
 import { GfxControllerIdentifier } from '@blocksuite/std/gfx';
@@ -275,76 +275,10 @@ export class EdgelessTemplatePanel extends WithDisposable(LitElement) {
     return this.edgeless.std.get(GfxControllerIdentifier);
   }
 
-  // Scale all coordinates in a template snapshot by a factor.
-  // Recursively walks blocks + surface elements, scaling xywh and connector positions.
-  private _scaleTemplateContent(
-    block: Record<string, unknown>,
-    scale: number,
-  ) {
-    const props = block['props'] as Record<string, unknown> | undefined;
-    if (!props) return;
-
-    // Scale block-level xywh
-    if (typeof props['xywh'] === 'string') {
-      const b = Bound.deserialize(props['xywh'] as string);
-      props['xywh'] = new Bound(
-        b.x * scale, b.y * scale, b.w * scale, b.h * scale,
-      ).serialize();
-    }
-
-    // Scale surface elements
-    if (props['elements'] && typeof props['elements'] === 'object') {
-      for (const val of Object.values(
-        props['elements'] as Record<string, Record<string, unknown>>,
-      )) {
-        if (typeof val['xywh'] === 'string') {
-          const b = Bound.deserialize(val['xywh'] as string);
-          val['xywh'] = new Bound(
-            b.x * scale, b.y * scale, b.w * scale, b.h * scale,
-          ).serialize();
-        }
-        // Scale stroke/line widths
-        if (typeof val['strokeWidth'] === 'number') {
-          val['strokeWidth'] = (val['strokeWidth'] as number) * scale;
-        }
-        if (typeof val['fontSize'] === 'number') {
-          val['fontSize'] = (val['fontSize'] as number) * scale;
-        }
-        // Scale connector rough points
-        if (val['type'] === 'connector') {
-          if (Array.isArray(val['controllers'])) {
-            for (const ctrl of val['controllers'] as Record<string, unknown>[]) {
-              if (typeof ctrl['x'] === 'number') ctrl['x'] = (ctrl['x'] as number) * scale;
-              if (typeof ctrl['y'] === 'number') ctrl['y'] = (ctrl['y'] as number) * scale;
-            }
-          }
-        }
-      }
-    }
-
-    // Recurse into children
-    const children = block['children'] as Record<string, unknown>[] | undefined;
-    if (Array.isArray(children)) {
-      for (const child of children) {
-        this._scaleTemplateContent(child, scale);
-      }
-    }
-  }
-
   private async _insertTemplate(template: Template, bound: Bound) {
     this._loadingTemplate = template;
 
     template = cloneDeep(template);
-
-    // Scale template to 30% of original size for better fit on canvas
-    try {
-      const blocks = (template.content as any)?.blocks;
-      if (blocks) {
-        this._scaleTemplateContent(blocks, 0.3);
-      }
-    } catch (e) {
-      console.warn('[template] scale failed, using original size:', e);
-    }
 
     const center = {
       x: bound.x + bound.w / 2,

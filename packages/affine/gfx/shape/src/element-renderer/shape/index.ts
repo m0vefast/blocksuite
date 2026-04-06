@@ -21,12 +21,12 @@ import { DefaultTheme, TextAlign } from '@blocksuite/affine-model';
 import type { IBound } from '@blocksuite/global/gfx';
 import { Bound } from '@blocksuite/global/gfx';
 
-// ── Stencil data replay (self-contained shape geometry stored in Yjs) ────────
+// ── Stencil data replay (self-contained shape ops stored in Yjs) ────────────
 // stencilData is a JSON string: { w, h, ops: [[cmd, ...args], ...] }
-// Replay function stored on globalThis — set by web-canvas layer at startup.
-type StencilReplayFn = (ctx: CanvasRenderingContext2D, json: string, w: number, h: number) => boolean;
-export function setStencilReplayFn(fn: StencilReplayFn) { (globalThis as any).__stencilReplayFn = fn; }
-function getReplayFn(): StencilReplayFn | null { return (globalThis as any).__stencilReplayFn ?? null; }
+// Replay function provided by the web-canvas layer at runtime.
+type StencilReplayFn = (ctx: CanvasRenderingContext2D, json: string, w: number, h: number, fill?: string, stroke?: string) => boolean;
+let _replayFn: StencilReplayFn | null = null;
+export function setStencilReplayFn(fn: StencilReplayFn) { _replayFn = fn; }
 import { deltaInsertsToChunks } from '@blocksuite/std/inline';
 
 import { diamond } from './diamond.js';
@@ -76,14 +76,9 @@ export const shape: ElementRenderer<ShapeElementModel> = (
   );
   const colors = { color, fillColor, strokeColor };
 
-  // Stencil override: if stencilData is set, replay stored Canvas 2D geometry ops.
-  // Colors come from model (like built-in shapes). Internal brand colors in ops override.
-  const _replayFn = getReplayFn();
-  const stencilData: string = model.stencilData
-    || (model as any).yMap?.get?.('stencilData')
-    || '';
-  if (stencilData && _replayFn) {
-    const { rotate, strokeStyle, strokeWidth } = model;
+  // Stencil override: if stencilData is set, replay stored Canvas 2D ops
+  if (model.stencilData && _replayFn) {
+    const { filled, rotate, strokeStyle, strokeWidth } = model;
     const [, , w, h] = model.deserializedXYWH;
     const renderOffset = Math.max(strokeWidth, 0) / 2;
     const renderWidth = w - renderOffset * 2;
@@ -99,12 +94,9 @@ export const shape: ElementRenderer<ShapeElementModel> = (
         .translateSelf(-cx, -cy)
     );
 
-    // Pre-set colors from model — same as built-in shapes.
-    // Stencil ops with internal brand colors will override these.
-    // Stroke uses semi-transparent dark for contrast against fill
-    // (many stencil shapes have internal detail lines that must contrast with fill).
-    ctx.fillStyle = fillColor;
-    ctx.strokeStyle = strokeStyle === 'none' ? 'transparent' : 'rgba(0, 0, 0, 0.45)';
+    const effectiveStroke = strokeStyle === 'none' ? 'transparent' : 'rgba(0, 0, 0, 0.55)';
+    ctx.fillStyle = filled ? fillColor : 'transparent';
+    ctx.strokeStyle = effectiveStroke;
     ctx.lineWidth = strokeWidth;
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
@@ -112,7 +104,8 @@ export const shape: ElementRenderer<ShapeElementModel> = (
     else ctx.setLineDash([]);
 
     try {
-      _replayFn(ctx, stencilData, renderWidth, renderHeight);
+      _replayFn(ctx, model.stencilData, renderWidth, renderHeight,
+        filled ? fillColor : 'transparent', effectiveStroke);
     } finally {
       ctx.setTransform(
         ctx

@@ -22,6 +22,7 @@ import { TableStoreExtension } from '@blocksuite/affine-block-table/store';
 import { FoundationStoreExtension } from '@blocksuite/affine-foundation/store';
 import { BrushStoreExtension } from '@blocksuite/affine-gfx-brush/store';
 import { ConnectorStoreExtension } from '@blocksuite/affine-gfx-connector/store';
+import { GridStoreExtension } from '@blocksuite/affine-gfx-grid/store';
 import { GroupStoreExtension } from '@blocksuite/affine-gfx-group/store';
 import { MindmapStoreExtension } from '@blocksuite/affine-gfx-mindmap/store';
 import { ShapeStoreExtension } from '@blocksuite/affine-gfx-shape/store';
@@ -68,6 +69,7 @@ export function getInternalStoreExtensions() {
     ShapeStoreExtension,
     MindmapStoreExtension,
     ConnectorStoreExtension,
+    GridStoreExtension,
     GroupStoreExtension,
     TextStoreExtension,
   ];
